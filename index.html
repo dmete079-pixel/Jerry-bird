@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <!-- PWA ve Tam Ekran Mobil Ayarları -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Jerry Bird - Web</title>
+  <!-- Firebase SDK'ları -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body { background-color: #0d1321; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    .tab-content { flex: 1; display: none; padding: 16px; overflow-y: auto; position: relative; }
+    .tab-content.active { display: flex; flex-direction: column; }
+
+    #game-tab { padding: 0; position: relative; justify-content: center; align-items: center; background: #70c5ce; width: 100%; height: 100%; }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+    .game-overlay {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .user-badge {
+      background: rgba(13, 19, 33, 0.6);
+      backdrop-filter: blur(4px);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .main-score {
+      font-size: 36px;
+      font-weight: 900;
+      color: #ffb703;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stats-bar { display: flex; gap: 8px; }
+    .stat-box {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(4px);
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: bold;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .best-score-badge {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(13, 19, 33, 0.75);
+      backdrop-filter: blur(4px);
+      border: 1px solid #ffb703;
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #ffb703;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .best-score-badge span { font-size: 15px; font-weight: 900; color: #fff; }
+
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .btn { background: #ffb703; color: #0d1321; border: none; padding: 10px 16px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    .btn:active { transform: scale(0.96); }
+    .btn:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
+
+    .admin-card { background: #151c2f; border: 1px solid #ef4444; border-radius: 14px; padding: 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .admin-input { background: #0d1321; border: 1px solid #334155; color: #fff; padding: 10px; border-radius: 8px; font-size: 14px; width: 100%; outline: none; }
+    .admin-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .admin-action-btn { flex: 1; padding: 10px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; font-size: 13px; }
+    .btn-green { background: #22c55e; color: #fff; }
+    .btn-red { background: #ef4444; color: #fff; }
+    .btn-blue { background: #3b82f6; color: #fff; }
+
+    .nav-bar { 
+      display: flex; 
+      justify-content: space-evenly; 
+      align-items: center;
+      background: #1e293b; 
+      padding: 8px 4px 10px 4px; 
+      border-top: 1px solid #334155;
+      z-index: 20;
+    }
+    .nav-item { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center;
+      font-size: 10px; 
+      color: #94a3b8; 
+      cursor: pointer; 
+      font-weight: 600;
+      flex: 1;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .nav-item.active { color: #ffb703; }
+    .nav-icon { font-size: 18px; margin-bottom: 2px; }
+
+    #connection-banner {
+      position: fixed;
+      top: 0; left: 0; width: 100%;
+      background: #ef4444; color: #fff;
+      font-size: 11px; text-align: center; padding: 3px;
+      z-index: 999; display: none; font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="connection-banner">⚠️ İnternet bağlantısı koptu! Çevrimdışı çalışılıyor...</div>
+
+  <!-- 1. OYUN SEKMESİ -->
+  <div id="game-tab" class="tab-content active">
+    <div class="best-score-badge">
+      🏆 Rekor
+      <span id="best-score-display">0</span>
+    </div>
+
+    <div class="game-overlay">
+      <div class="user-badge" id="player-username-badge">🐭 Jerry Bird</div>
+      <div class="main-score">🧀 <span id="total-score">0</span></div>
+      <div class="stats-bar">
+        <div class="stat-box" style="color:#2ec4b6;" id="net-status-text">🌐 Bulut Bağlı</div>
+        <div class="stat-box" style="color:#ffb703;">🎡 Çark: <span id="wheel-count">1</span>/1</div>
+      </div>
+    </div>
+    <canvas id="flappyCanvas"></canvas>
+  </div>
+
+  <!-- 2. ÇARK SEKMESİ -->
+  <div id="wheel-tab" class="tab-content">
+    <h3 style="color:#ffb703; margin-bottom:5px;">🎡 Şans Çarkı</h3>
+    <p style="margin-bottom: 20px; color: #94a3b8; font-size: 13px;">Günde 1 kez çarkı çevirerek 5-25 arası peynir kazan!</p>
+    <div style="text-align:center; margin-top:40px;">
+      <button id="spin-btn" class="btn" onclick="spinWheel()" style="padding: 16px 40px; font-size: 18px; width: 80%;">ÇARKI ÇEVİR</button>
+    </div>
+  </div>
+
+  <!-- 3. GÖREV SEKMESİ -->
+  <div id="tasks-tab" class="tab-content">
+    <h3 style="color:#ffb703; margin-bottom:5px;">✅ Görevler</h3>
+    <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Kanallara katıl, ekstra peynirleri kap!</p>
+    <div class="card">
+      <div>
+        <strong style="font-size: 14px;">Telegram Kanalına Katıl</strong>
+        <div style="font-size:12px; color:#ffb703; margin-top:2px;">+100 Peynir 🧀</div>
+      </div>
+      <button id="task-btn-1" class="btn" onclick="completeTask(this, 100, 'https://t.me/Jerrybird')">Katıl</button>
+    </div>
+  </div>
+
+  <!-- 4. DOST (REF) SEKMESİ -->
+  <div id="friends-tab" class="tab-content">
+    <h3 style="color:#ffb703; margin-bottom:5px;">👥 Arkadaşını Davet Et</h3>
+    <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Her gelen arkadaşın için <strong>+100 Peynir 🧀</strong> kazan!</p>
+    <div class="card" style="flex-direction: column; gap: 12px; text-align: center; padding: 20px;">
+      <div style="font-size: 14px; font-weight: bold; color: #2ec4b6;">
+        Davet Edilen: <span id="invited-count">0</span> Kişi
+      </div>
+      <div style="font-size: 12px; color: #cbd5e1; background: #0f172a; padding: 10px; border-radius: 8px; width: 100%; word-break: break-all;" id="ref-link">https://jerrybird.web.app?ref=oyuncu</div>
+      <button class="btn" onclick="copyRefLink()" style="width: 100%;">Davet Linkini Kopyala</button>
+    </div>
+  </div>
+
+  <!-- 5. ÖDEME SEKMESİ -->
+  <div id="payout-tab" class="tab-content">
+    <h3 style="color:#ffb703; margin-bottom:5px;">💳 Ödeme Talebi</h3>
+    <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Peynir limitine ulaştığında ödeme isteyebilirsin:</p>
+    <div class="card">
+      <div><strong style="font-size: 14px;">Gümüş Paket</strong><div style="font-size:12px; color:#ffb703;">50.000 Peynir 🧀</div></div>
+      <button class="btn" onclick="checkPayout(50000, 'Gümüş Paket')">Talep Et</button>
+    </div>
+    <div class="card">
+      <div><strong style="font-size: 14px;">Altın Paket</strong><div style="font-size:12px; color:#ffb703;">100.000 Peynir 🧀</div></div>
+      <button class="btn" onclick="checkPayout(100000, 'Altın Paket')">Talep Et</button>
+    </div>
+    <div class="card" style="border: 1px solid #ffb703;">
+      <div><strong style="font-size: 14px; color:#ffb703;">👑 Mega VIP Paket</strong><div style="font-size:12px; color:#ffb703;">300.000 Peynir 🧀</div></div>
+      <button class="btn" onclick="checkPayout(300000, 'Mega VIP Paket')">Talep Et</button>
+    </div>
+  </div>
+
+  <!-- 6. SIRALAMA SEKMESİ -->
+  <div id="leaderboard-tab" class="tab-content">
+    <h3 style="color:#ffb703; margin-bottom:5px;">🏆 Liderlik Tablosu</h3>
+    <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Genel Oyuncu Sıralaması:</p>
+    <div id="leaderboard-list">
+      <div style="text-align:center; color:#94a3b8; padding:20px;">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- 7. ADMIN PANELİ SEKMESİ (Sadece admin görebilir) -->
+  <div id="admin-tab" class="tab-content">
+    <h3 style="color:#ef4444; margin-bottom:5px;">🛡️ Yönetici Paneli</h3>
+    <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Kullanıcı Adı ile Yönetim:</p>
+    
+    <div class="admin-card">
+      <label style="font-size: 12px; color: #94a3b8;">Oyuncu Kullanıcı Adı (Örn: beratcan270):</label>
+      <input type="text" id="admin-search-input" class="admin-input" placeholder="Kullanıcı adı yaz...">
+      <button class="admin-action-btn btn-blue" onclick="searchUserManually()" style="width:100%;">Oyuncuyu Bul / Yönet</button>
+    </div>
+
+    <div id="admin-user-info" class="admin-card" style="display:none; border-color: #3b82f6;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="color:#ffb703; font-size:15px;">Oyuncu Kontrol Paneli</strong>
+        <button onclick="adminCloseUser()" style="background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; font-size:16px;">✕</button>
+      </div>
+      <div id="target-user-details" style="font-size: 13px; line-height: 1.6; color: #cbd5e1;"></div>
+      
+      <div class="admin-btn-row">
+        <button class="admin-action-btn btn-green" onclick="adminApprovePayout()" style="background:#10b981;">✅ Ödemeyi Onayla</button>
+      </div>
+
+      <div class="admin-btn-row">
+        <button class="admin-action-btn btn-green" onclick="adminModifyScore(1000)">+1000 Peynir</button>
+        <button class="admin-action-btn btn-red" onclick="adminModifyScore(-1000)">-1000 Peynir</button>
+      </div>
+
+      <div class="admin-btn-row">
+        <button class="admin-action-btn btn-red" onclick="adminBanUser()">Skorunu Sıfırla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alt Menü -->
+  <div class="nav-bar" id="main-nav-bar">
+    <div class="nav-item active" onclick="switchTab('game-tab', this)"><span class="nav-icon">🕹️</span>Oyna</div>
+    <div class="nav-item" onclick="switchTab('wheel-tab', this)"><span class="nav-icon">🎡</span>Çark</div>
+    <div class="nav-item" onclick="switchTab('tasks-tab', this)"><span class="nav-icon">✅</span>Görev</div>
+    <div class="nav-item" onclick="switchTab('friends-tab', this)"><span class="nav-icon">👥</span>Dost</div>
+    <div class="nav-item" onclick="switchTab('payout-tab', this)"><span class="nav-icon">💳</span>Ödeme</div>
+    <div class="nav-item" onclick="switchTab('leaderboard-tab', this)"><span class="nav-icon">🏆</span>Sıralama</div>
+    <!-- Admin Butonu (Başlangıçta gizli) -->
+    <div class="nav-item" id="admin-nav-btn" style="display: none;" onclick="switchTab('admin-tab', this)"><span class="nav-icon">🛡️</span>Admin</div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAgHzEX5qIKzXL8UlV17wBUilSV2qvGhY8",
+      authDomain: "jerry-bird.firebaseapp.com",
+      databaseURL: "https://jerry-bird-default-rtdb.firebaseio.com",
+      projectId: "jerry-bird",
+      storageBucket: "jerry-bird.firebasestorage.app",
+      messagingSenderId: "77159079252",
+      appId: "1:77159079252:web:fcc1f6ca1f50a056063cc1",
+      measurementId: "G-1ZPB55BKS4"
+    };
+
+    let db = null;
+    let isOnline = false;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      isOnline = true;
+    } catch(e) {
+      console.warn("Firebase bağlantısı kurulamadı.");
+    }
+
+    window.addEventListener('online', () => {
+      document.getElementById('connection-banner').style.display = 'none';
+      document.getElementById('net-status-text').innerText = "🌐 Bulut Bağlı";
+    });
+    window.addEventListener('offline', () => {
+      document.getElementById('connection-banner').style.display = 'block';
+      document.getElementById('net-status-text').innerText = "⚠️ Çevrimdışı";
+    });
+
+    // Web tabanlı kullanıcı adı yönetimi (URL parametresi veya yerel kayıt)
+    let username = "oyuncu_" + Math.floor(Math.random() * 90000 + 10000);
+    const urlParams = new URLSearchParams(window.location.search);
+    if(urlParams.get('username')) {
+      username = urlParams.get('username').toLowerCase();
+    } else if(localStorage.getItem('jerry_web_username')) {
+      username = localStorage.getItem('jerry_web_username');
+    } else {
+      let entered = prompt("Lütfen bir rumuz (kullanıcı adı) belirleyin:", "");
+      if(entered && entered.trim() !== "") {
+        username = entered.trim().toLowerCase();
+      }
+      localStorage.setItem('jerry_web_username', username);
+    }
+
+    document.getElementById('player-username-badge').innerText = "🐭 " + username;
+
+    // --- ADMIN KONTROLÜ ---
+    // Eğer kullanıcı adı jerry_bird_admin ise alt menüdeki Admin butonunu aç
+    if (username === "jerry_bird_admin") {
+      document.getElementById('admin-nav-btn').style.display = "flex";
+    }
+
+    const userKey = username.replace(/[.#$[\]]/g, "_").toLowerCase();
+    document.getElementById('ref-link').innerText = window.location.origin + window.location.pathname + "?username=" + username;
+
+    // --- VERİ YÜKLEME ---
+    let score = parseInt(localStorage.getItem('jerry_score_' + userKey)) || 0;
+    let bestScore = parseInt(localStorage.getItem('jerry_best_score_' + userKey)) || 0;
+    let totalPipesPassed = parseInt(localStorage.getItem('jerry_pipes_' + userKey)) || 0;
+    let cheeseCollectedCount = parseInt(localStorage.getItem('jerry_cheese_' + userKey)) || 0;
+    let invitedCount = parseInt(localStorage.getItem('jerry_invited_' + userKey)) || 0;
+    let wheelRights = localStorage.getItem('jerry_wheel_' + userKey) !== null ? parseInt(localStorage.getItem('jerry_wheel_' + userKey)) : 1;
+    let wheelSpinsTotal = parseInt(localStorage.getItem('jerry_wheel_spins_' + userKey)) || 0;
+    let taskCompleted = localStorage.getItem('jerry_task_' + userKey) === 'true';
+    let payoutStatus = localStorage.getItem('jerry_payout_status_' + userKey) || "Yok";
+    let payoutPackageName = localStorage.getItem('jerry_payout_package_' + userKey) || "";
+
+    updateUI();
+    loadUserData();
+
+    function loadUserData() {
+      if (db && isOnline) {
+        db.ref('users/' + userKey).once('value').then((snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            if (data.score !== undefined && data.score >= score) score = data.score;
+            if (data.bestScore !== undefined && data.bestScore >= bestScore) bestScore = data.bestScore;
+            if (data.pipes !== undefined) totalPipesPassed = data.pipes;
+            if (data.cheese !== undefined) cheeseCollectedCount = data.cheese;
+            if (data.invited !== undefined) invitedCount = data.invited;
+            if (data.wheelRights !== undefined) wheelRights = data.wheelRights;
+            if (data.wheelSpinsTotal !== undefined) wheelSpinsTotal = data.wheelSpinsTotal;
+            if (data.taskCompleted !== undefined) taskCompleted = data.taskCompleted;
+            if (data.payoutStatus !== undefined) payoutStatus = data.payoutStatus;
+            if (data.payoutPackageName !== undefined) payoutPackageName = data.payoutPackageName;
+          }
+          updateUI();
+          saveData();
+        }).catch(() => {});
+      }
+    }
+
+    function updateUI() {
+      document.getElementById('total-score').innerText = score.toLocaleString();
+      document.getElementById('best-score-display').innerText = bestScore;
+      document.getElementById('invited-count').innerText = invitedCount;
+
+      if(wheelRights <= 0) {
+        const spinBtn = document.getElementById('spin-btn');
+        spinBtn.disabled = true;
+        spinBtn.innerText = "HAKKIN BİTTİ";
+        document.getElementById('wheel-count').innerText = 0;
+      } else {
+        document.getElementById('wheel-count').innerText = wheelRights;
+      }
+
+      if(taskCompleted) {
+        const tBtn = document.getElementById('task-btn-1');
+        tBtn.disabled = true;
+        tBtn.innerText = "Tamamlandı";
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem('jerry_score_' + userKey, score);
+      localStorage.setItem('jerry_best_score_' + userKey, bestScore);
+      localStorage.setItem('jerry_pipes_' + userKey, totalPipesPassed);
+      localStorage.setItem('jerry_cheese_' + userKey, cheeseCollectedCount);
+      localStorage.setItem('jerry_invited_' + userKey, invitedCount);
+      localStorage.setItem('jerry_wheel_' + userKey, wheelRights);
+      localStorage.setItem('jerry_wheel_spins_' + userKey, wheelSpinsTotal);
+      localStorage.setItem('jerry_task_' + userKey, taskCompleted);
+      localStorage.setItem('jerry_payout_status_' + userKey, payoutStatus);
+      localStorage.setItem('jerry_payout_package_' + userKey, payoutPackageName);
+
+      if (db && isOnline) {
+        db.ref('users/' + userKey).update({
+          username: username,
+          score: score,
+          bestScore: bestScore,
+          pipes: totalPipesPassed,
+          cheese: cheeseCollectedCount,
+          invited: invitedCount,
+          wheelRights: wheelRights,
+          wheelSpinsTotal: wheelSpinsTotal,
+          taskCompleted: taskCompleted,
+          payoutStatus: payoutStatus,
+          payoutPackageName: payoutPackageName,
+          lastActive: Date.now()
+        });
+      }
+    }
+
+    // --- LİDERLİK TABLOSU ---
+    function loadLeaderboard() {
+      const container = document.getElementById('leaderboard-list');
+      if (!db || !isOnline) {
+        container.innerHTML = `<div class="card"><div><strong>Bulut bağlantısı yok.</strong></div></div>`;
+        return;
+      }
+
+      container.innerHTML = `<div style="text-align:center; color:#94a3b8; padding:20px;">Yükleniyor...</div>`;
+
+      db.ref('users').once('value').then((snapshot) => {
+        let users = [];
+        snapshot.forEach((childSnapshot) => {
+          users.push(childSnapshot.val());
+        });
+        
+        users.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        if (users.length === 0) {
+          container.innerHTML = `<div class="card"><div><strong>Henüz kayıtlı oyuncu yok.</strong></div></div>`;
+          return;
+        }
+
+        let html = '';
+        users.slice(0, 50).forEach((u, index) => {
+          let rankIcon = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `<b>#${index + 1}</b>`;
+          let isMe = (u.username && u.username.toLowerCase() === username);
+          let cardStyle = isMe ? 'border: 1px solid #ffb703; background: #26334d;' : '';
+          let displayName = u.username ? u.username : "İsimsiz Oyuncu";
+          if(isMe) displayName += " (Sen)";
+
+          html += `
+            <div class="card" style="${cardStyle}">
+              <div><strong>${rankIcon} ${displayName}</strong></div>
+              <strong style="color:#ffb703;">${(u.score || 0).toLocaleString()} Peynir 🧀</strong>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      }).catch(() => {
+        container.innerHTML = `<div class="card"><div><strong>Sıralama yüklenirken hata oluştu.</strong></div></div>`;
+      });
+    }
+
+    // --- ADMIN PANELİ ---
+    let currentTargetUserKey = "";
+
+    function searchUserManually() {
+      if (username !== "jerry_bird_admin") return;
+      let inputVal = document.getElementById('admin-search-input').value.trim().toLowerCase();
+      if(!inputVal) {
+        inputVal = userKey;
+      }
+      let targetKey = inputVal.replace('@', '').replace(/[.#$[\]]/g, "_").toLowerCase();
+      currentTargetUserKey = targetKey;
+
+      if (!db || !isOnline) {
+        alert("Bulut bağlantısı yok!");
+        return;
+      }
+
+      db.ref('users/' + targetKey).once('value').then((snapshot) => {
+        const data = snapshot.val();
+        if(!data) {
+          alert("Bu kullanıcı adıyla kayıtlı veri bulunamadı!");
+          document.getElementById('admin-user-info').style.display = 'none';
+          return;
+        }
+
+        let payoutDisplay = "Talep Yok ❌";
+        if(data.payoutStatus === "Bekliyor") {
+          payoutDisplay = `⏳ Ödeme Bekliyor (${data.payoutPackageName})`;
+        } else if(data.payoutStatus === "Ödendi") {
+          payoutDisplay = `✅ Ödemesi Yapıldı (${data.payoutPackageName})`;
+        }
+
+        document.getElementById('admin-user-info').style.display = 'flex';
+        document.getElementById('target-user-details').innerHTML = `
+          👤 <b>Kullanıcı:</b> ${data.username || targetKey}<br>
+          💰 <b>Bakiye:</b> ${(data.score || 0).toLocaleString()} Peynir 🧀<br>
+          💳 <b>Ödeme Durumu:</b> <span style="color:${data.payoutStatus === 'Bekliyor' ? '#ffb703' : data.payoutStatus === 'Ödendi' ? '#22c55e' : '#94a3b8'}">${payoutDisplay}</span><br>
+          🏆 <b>Rekor:</b> ${data.bestScore || 0} Boru<br>
+          📊 <b>Toplam Boru:</b> ${data.pipes || 0} Kez<br>
+        `;
+      }).catch((err) => {
+        alert("Arama hatası: " + err.message);
+      });
+    }
+
+    function adminModifyScore(amount) {
+      if(username !== "jerry_bird_admin" || !currentTargetUserKey) return;
+      db.ref('users/' + currentTargetUserKey + '/score').once('value').then((snapshot) => {
+        let currentVal = snapshot.val() || 0;
+        let newVal = currentVal + amount;
+        if(newVal < 0) newVal = 0;
+        
+        db.ref('users/' + currentTargetUserKey).update({ score: newVal }).then(() => {
+          if(currentTargetUserKey === userKey) {
+            score = newVal;
+            updateUI();
+          }
+          alert(`Kullanıcı bakiyesi güncellendi: ${newVal} Peynir`);
+          searchUserManually();
+        });
+      });
+    }
+
+    function adminApprovePayout() {
+      if(username !== "jerry_bird_admin" || !currentTargetUserKey) return;
+      db.ref('users/' + currentTargetUserKey).update({ payoutStatus: "Ödendi" }).then(() => {
+        if(currentTargetUserKey === userKey) {
+          payoutStatus = "Ödendi";
+        }
+        alert("Ödeme başarıyla 'Ödendi' olarak onaylandı! ✅");
+        searchUserManually();
+      });
+    }
+
+    function adminBanUser() {
+      if(username !== "jerry_bird_admin" || !currentTargetUserKey) return;
+      if(confirm("Bu kullanıcının skorunu sıfırlamak istiyor musunuz?")) {
+        db.ref('users/' + currentTargetUserKey).update({ score: 0, bestScore: 0 }).then(() => {
+          if(currentTargetUserKey === userKey) {
+            score = 0;
+            bestScore = 0;
+            updateUI();
+          }
+          alert("Kullanıcı skoru sıfırlandı.");
+          searchUserManually();
+        });
+      }
+    }
+
+    function adminCloseUser() {
+      document.getElementById('admin-user-info').style.display = 'none';
+      currentTargetUserKey = "";
+    }
+
+    // Ses Efektleri
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSwooshSound() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    }
+    function playCrunchSound() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const times = [0, 0.05, 0.1];
+      times.forEach((t, index) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(index === 1 ? 800 : 500, audioCtx.currentTime + t);
+        osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + t + 0.04);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + t + 0.04);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + t);
+        osc.stop(audioCtx.currentTime + t + 0.04);
+      });
+    }
+    function playGameOverSound() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    }
+
+    const canvas = document.getElementById('flappyCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const birdImg = new Image();
+    birdImg.src = 'https://upload.wikimedia.org/wikipedia/en/2/2f/Jerry_Mouse.png';
+
+    const bird = { x: 50, y: 200, width: 38, height: 44, gravity: 0, lift: -380, velocity: 0 };
+    let currentRunPipes = 0; 
+    const pipes = [];
+    const pipeWidth = 60;
+    const pipeGap = 150;
+    let pipeTimer = 0;
+    let totalPipesCreated = 0;
+    let gameStarted = false;
+    let gameOver = false;
+    let animationFrameId = null;
+    let lastTime = null;
+
+    canvas.addEventListener('touchstart', handleJump, { passive: false });
+    canvas.addEventListener('mousedown', handleJump);
+
+    function handleJump(e) {
+      e.preventDefault();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (!gameStarted) {
+        gameStarted = true;
+        bird.gravity = 1400; 
+        bird.velocity = bird.lift;
+        lastTime = performance.now();
+        if (!animationFrameId) animationFrameId = requestAnimationFrame(loop);
+        return;
+      }
+      if (gameOver) {
+        resetGame();
+      } else {
+        bird.velocity = bird.lift;
+      }
+    }
+
+    function resetGame() {
+      bird.y = canvas.height / 2;
+      bird.velocity = bird.lift;
+      bird.gravity = 1400;
+      pipes.length = 0;
+      totalPipesCreated = 0;
+      currentRunPipes = 0;
+      pipeTimer = 0;
+      gameStarted = true;
+      gameOver = false;
+      lastTime = performance.now();
+      if (!animationFrameId) animationFrameId = requestAnimationFrame(loop);
+    }
+
+    function drawStartScreen() {
+      ctx.fillStyle = "#70c5ce";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (birdImg.complete && birdImg.naturalWidth !== 0) {
+        ctx.save();
+        ctx.translate(bird.x + bird.width, bird.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(birdImg, 0, 0, bird.width, bird.height);
+        ctx.restore();
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("JERRY BIRD - WEB", canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = "15px sans-serif";
+      ctx.fillStyle = "#ffb703";
+      ctx.fillText("Başlamak İçin Dokun 🧀", canvas.width / 2, canvas.height / 2 + 15);
+    }
+
+    function loop(timestamp) {
+      if (!gameStarted || gameOver) {
+        animationFrameId = null;
+        return;
+      }
+
+      if (!lastTime) lastTime = timestamp;
+      let dt = (timestamp - lastTime) / 1000;
+      lastTime = timestamp;
+      if (dt > 0.1) dt = 0.1;
+
+      ctx.fillStyle = "#70c5ce";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      bird.velocity += bird.gravity * dt;
+      bird.y += bird.velocity * dt;
+
+      if (bird.y + bird.height >= canvas.height) { bird.y = canvas.height - bird.height; endGame(); }
+      if (bird.y <= 0) { bird.y = 0; bird.velocity = 0; }
+
+      if (birdImg.complete && birdImg.naturalWidth !== 0) {
+        ctx.save();
+        ctx.translate(bird.x + bird.width, bird.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(birdImg, 0, 0, bird.width, bird.height);
+        ctx.restore();
+      }
+
+      pipeTimer += dt;
+      if (pipeTimer > 1.6) {
+        pipeTimer = 0;
+        totalPipesCreated++;
+        let topHeight = Math.floor(Math.random() * (canvas.height - pipeGap - 120)) + 40;
+        let hasCheese = (totalPipesCreated % 3 === 0);
+        pipes.push({ x: canvas.width, top: topHeight, bottom: canvas.height - topHeight - pipeGap, passed: false, hasCheese: hasCheese, cheeseCollected: false, cheeseY: topHeight + (pipeGap / 2) - 12 });
+      }
+
+      for (let i = pipes.length - 1; i >= 0; i--) {
+        let p = pipes[i];
+        p.x -= 180 * dt;
+        drawPipe(p.x, 0, pipeWidth, p.top, true);
+        drawPipe(p.x, canvas.height - p.bottom, pipeWidth, p.bottom, false);
+
+        if (p.hasCheese && !p.cheeseCollected) {
+          ctx.font = "24px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("🧀", p.x + (pipeWidth / 2), p.cheeseY + 18);
+          let cheeseX = p.x + (pipeWidth / 2);
+          let cheeseY = p.cheeseY + 12;
+          if (bird.x < cheeseX + 15 && bird.x + bird.width > cheeseX - 15 && bird.y < cheeseY + 15 && bird.y + bird.height > cheeseY - 15) {
+            p.cheeseCollected = true;
+            cheeseCollectedCount++;
+            playCrunchSound();
+            addScore(2);
+          }
+        }
+
+        if (bird.x < p.x + pipeWidth && bird.x + bird.width > p.x && (bird.y < p.top || bird.y + bird.height > canvas.height - p.bottom)) {
+          endGame();
+        }
+
+        if (p.x + pipeWidth < bird.x && !p.passed) {
+          p.passed = true;
+          currentRunPipes++;
+          totalPipesPassed++;
+          
+          if (currentRunPipes > bestScore) {
+            bestScore = currentRunPipes;
+            document.getElementById('best-score-display').innerText = bestScore;
+          }
+
+          playSwooshSound();
+          addScore(1);
+        }
+
+        if (p.x + pipeWidth < 0) { pipes.splice(i, 1); }
+      }
+      
+      animationFrameId = requestAnimationFrame(loop);
+    }
+
+    function drawPipe(x, y, width, height, isTop) {
+      ctx.fillStyle = "#73bf2e";
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeStyle = "#2e5c0e";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, width, height);
+      let capHeight = 20;
+      let capY = isTop ? height - capHeight : y;
+      ctx.fillStyle = "#73bf2e";
+      ctx.fillRect(x - 4, capY, width + 8, capHeight);
+      ctx.strokeRect(x - 4, capY, width + 8, capHeight);
+    }
+
+    function endGame() {
+      gameOver = true;
+      playGameOverSound();
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("YANDIN!", canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = "14px sans-serif";
+      ctx.fillText("Tekrar Oynamak İçin Dokun", canvas.width / 2, canvas.height / 2 + 20);
+      saveData();
+    }
+
+    function switchTab(tabId, element) {
+      if (tabId === 'admin-tab' && username !== "jerry_bird_admin") {
+        return;
+      }
+
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      element.classList.add('active');
+
+      if(tabId === 'game-tab') {
+        resizeCanvas();
+        if(!gameStarted) { drawStartScreen(); } else if(gameOver) { resetGame(); }
+      } else if(tabId === 'leaderboard-tab') {
+        loadLeaderboard();
+      } else if(tabId === 'admin-tab') {
+        document.getElementById('admin-search-input').value = username;
+      }
+    }
+
+    function addScore(amount) {
+      score += amount;
+      document.getElementById('total-score').innerText = score.toLocaleString();
+      saveData();
+    }
+
+    function completeTask(btn, reward, link) {
+      if(taskCompleted) return;
+      window.open(link, '_blank');
+      addScore(reward);
+      taskCompleted = true;
+      btn.disabled = true;
+      btn.innerText = "Tamamlandı";
+      saveData();
+    }
+
+    function copyRefLink() {
+      const link = document.getElementById('ref-link').innerText;
+      navigator.clipboard.writeText(link);
+      alert("Davet linkiniz kopyalandı! 🧀");
+    }
+
+    function checkPayout(targetScore, packageName) {
+      if (score >= targetScore) {
+        score -= targetScore;
+        document.getElementById('total-score').innerText = score.toLocaleString();
+
+        payoutStatus = "Bekliyor";
+        payoutPackageName = packageName;
+        saveData();
+
+        alert(`Tebrikler! ${targetScore.toLocaleString()} Peynirlik (${packageName}) ödeme talebiniz alındı.`);
+      } else {
+        alert(`Bu ödeme talebi için en az ${targetScore.toLocaleString()} peynire ulaşmalısınız.`);
+      }
+    }
+
+    function spinWheel() {
+      if (wheelRights <= 0) {
+        alert("Bugünlük çark çevirme hakkın bitti!");
+        return;
+      }
+      const possibleRewards = [5, 10, 15, 20, 25];
+      const win = possibleRewards[Math.floor(Math.random() * possibleRewards.length)];
+      wheelRights--;
+      wheelSpinsTotal++;
+      document.getElementById('wheel-count').innerText = wheelRights;
+      const btn = document.getElementById('spin-btn');
+      btn.disabled = true;
+      btn.innerText = "HAKKIN BİTTİ";
+      addScore(win);
+      saveData();
+      alert(`Tebrikler! Çarktan ${win} Peynir Kazandın! 🧀`);
+    }
+
+    drawStartScreen();
+  </script>
+</body>
+</html>
