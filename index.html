@@ -8,6 +8,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Jerry Bird - Web</title>
+  
+  <!-- Google AdSense Doğrulama ve Script Kodu -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1912755885049738" crossorigin="anonymous"></script>
+
   <!-- Firebase SDK'ları -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -86,6 +90,68 @@
     }
     .best-score-badge span { font-size: 15px; font-weight: 900; color: #fff; }
 
+    /* Alt Banner Reklam Alanı (320x50 Piksel AdSense Uyumlu) */
+    .ad-banner-container {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.9);
+      border-top: 2px solid #ffb703;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 5px 0;
+      z-index: 25;
+      flex-shrink: 0;
+    }
+    .ad-banner-slot {
+      width: 320px;
+      height: 50px;
+      background: #1e293b;
+      border: 1px dashed #475569;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: bold;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    /* 30 Saniyelik Geçiş Reklamı (Interstitial) Overlay */
+    #interstitial-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+    }
+    .interstitial-box {
+      background: #1e293b;
+      border: 2px solid #ffb703;
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .interstitial-timer {
+      font-size: 32px;
+      font-weight: 900;
+      color: #ffb703;
+    }
+
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
     .btn { background: #ffb703; color: #0d1321; border: none; padding: 10px 16px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
     .btn:active { transform: scale(0.96); }
@@ -139,6 +205,16 @@
 
   <div id="connection-banner">⚠️ İnternet bağlantısı koptu! Çevrimdışı çalışılıyor...</div>
 
+  <!-- 30 Saniyelik Geçiş Reklamı (Interstitial) Modalı -->
+  <div id="interstitial-overlay">
+    <div class="interstitial-box">
+      <h3 style="color:#ffb703;">📺 Geçiş Reklamı (Simülasyon)</h3>
+      <p style="font-size: 13px; color:#cbd5e1;">Her 150 boruda bir tetiklenen 30 saniyelik zorunlu reklam alanı.</p>
+      <div class="interstitial-timer" id="ad-countdown">30</div>
+      <button id="skip-ad-btn" class="btn" disabled style="width:100%;">Lütfen Bekleyin...</button>
+    </div>
+  </div>
+
   <!-- 1. OYUN SEKMESİ -->
   <div id="game-tab" class="tab-content active">
     <div class="best-score-badge">
@@ -183,6 +259,10 @@
   <div id="payout-tab" class="tab-content">
     <h3 style="color:#ffb703; margin-bottom:5px;">💳 Ödeme Talebi</h3>
     <p style="margin-bottom: 15px; color: #94a3b8; font-size: 13px;">Peynir limitine ulaştığında ödeme isteyebilirsin:</p>
+    <div class="card">
+      <div><strong style="font-size: 14px;">Bronz Paket</strong><div style="font-size:12px; color:#ffb703;">25.000 Peynir 🧀</div></div>
+      <button class="btn" onclick="checkPayout(25000, 'Bronz Paket')">Talep Et</button>
+    </div>
     <div class="card">
       <div><strong style="font-size: 14px;">Gümüş Paket</strong><div style="font-size:12px; color:#ffb703;">50.000 Peynir 🧀</div></div>
       <button class="btn" onclick="checkPayout(50000, 'Gümüş Paket')">Talep Et</button>
@@ -236,6 +316,15 @@
       <div class="admin-btn-row">
         <button class="admin-action-btn btn-red" onclick="adminBanUser()">Skorunu Sıfırla</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Sabit Alt Banner Alanı (320x50 AdSense Entegrasyonuna Hazır Alan) -->
+  <div class="ad-banner-container">
+    <div class="ad-banner-slot" id="banner-ad-slot">
+      <!-- AdSense Banner Kodu buraya eklenecek -->
+      <span>📢 REKLAM (320x50)</span>
+      <span style="font-size:8px; color:#64748b;">AdSense Hazır</span>
     </div>
   </div>
 
@@ -312,6 +401,15 @@
     let taskCompleted = localStorage.getItem('jerry_task_' + userKey) === 'true';
     let payoutStatus = localStorage.getItem('jerry_payout_status_' + userKey) || "Yok";
     let payoutPackageName = localStorage.getItem('jerry_payout_package_' + userKey) || "";
+    let playTimeSeconds = parseInt(localStorage.getItem('jerry_playtime_' + userKey)) || 0;
+
+    // Oyunda geçirilen süreyi her saniye artır
+    setInterval(() => {
+      if (gameStarted && !gameOver && !isAdPlaying) {
+        playTimeSeconds++;
+        saveData();
+      }
+    }, 1000);
 
     updateUI();
     loadUserData();
@@ -330,6 +428,7 @@
             if (data.taskCompleted !== undefined) taskCompleted = data.taskCompleted;
             if (data.payoutStatus !== undefined) payoutStatus = data.payoutStatus;
             if (data.payoutPackageName !== undefined) payoutPackageName = data.payoutPackageName;
+            if (data.playTimeSeconds !== undefined && data.playTimeSeconds >= playTimeSeconds) playTimeSeconds = data.playTimeSeconds;
           }
           updateUI();
           saveData();
@@ -367,6 +466,7 @@
       localStorage.setItem('jerry_task_' + userKey, taskCompleted);
       localStorage.setItem('jerry_payout_status_' + userKey, payoutStatus);
       localStorage.setItem('jerry_payout_package_' + userKey, payoutPackageName);
+      localStorage.setItem('jerry_playtime_' + userKey, playTimeSeconds);
 
       if (db && isOnline) {
         db.ref('users/' + userKey).update({
@@ -380,6 +480,7 @@
           taskCompleted: taskCompleted,
           payoutStatus: payoutStatus,
           payoutPackageName: payoutPackageName,
+          playTimeSeconds: playTimeSeconds,
           lastActive: Date.now()
         });
       }
@@ -459,6 +560,12 @@
           payoutDisplay = `✅ Ödemesi Yapıldı (${data.payoutPackageName})`;
         }
 
+        // Saniyeyi saat ve dakikaya çevir
+        let totalSec = data.playTimeSeconds || 0;
+        let hours = Math.floor(totalSec / 3600);
+        let minutes = Math.floor((totalSec % 3600) / 60);
+        let timeFormatted = hours > 0 ? `${hours} saat ${minutes} dakika` : `${minutes} dakika`;
+
         document.getElementById('admin-user-info').style.display = 'flex';
         document.getElementById('target-user-details').innerHTML = `
           👤 <b>Kullanıcı:</b> ${data.username || targetKey}<br>
@@ -466,6 +573,7 @@
           💳 <b>Ödeme Durumu:</b> <span style="color:${data.payoutStatus === 'Bekliyor' ? '#ffb703' : data.payoutStatus === 'Ödendi' ? '#22c55e' : '#94a3b8'}">${payoutDisplay}</span><br>
           🏆 <b>Rekor:</b> ${data.bestScore || 0} Boru<br>
           📊 <b>Toplam Boru:</b> ${data.pipes || 0} Kez<br>
+          ⏱️ <b>Toplam Oynama Süresi:</b> <span style="color:#38bdf8;">${timeFormatted}</span><br>
         `;
       }).catch((err) => {
         alert("Arama hatası: " + err.message);
@@ -582,13 +690,14 @@
 
     const bird = { x: 50, y: 200, width: 38, height: 44, gravity: 0, lift: -380, velocity: 0 };
     let currentRunPipes = 0; 
-    const pipes = [];
+    let pipes = [];
     const pipeWidth = 60;
     const pipeGap = 150;
     let pipeTimer = 0;
     let totalPipesCreated = 0;
     let gameStarted = false;
     let gameOver = false;
+    let isAdPlaying = false;
     let animationFrameId = null;
     let lastTime = null;
 
@@ -597,6 +706,7 @@
 
     function handleJump(e) {
       e.preventDefault();
+      if (isAdPlaying) return;
       if (audioCtx.state === 'suspended') audioCtx.resume();
       if (!gameStarted) {
         gameStarted = true;
@@ -614,6 +724,7 @@
     }
 
     function resetGame() {
+      if (isAdPlaying) return;
       bird.y = canvas.height / 2;
       bird.velocity = bird.lift;
       bird.gravity = 1400;
@@ -625,6 +736,41 @@
       gameOver = false;
       lastTime = performance.now();
       if (!animationFrameId) animationFrameId = requestAnimationFrame(loop);
+    }
+
+    function triggerInterstitialAd() {
+      isAdPlaying = true;
+      gameStarted = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+
+      const overlay = document.getElementById('interstitial-overlay');
+      const countdownEl = document.getElementById('ad-countdown');
+      const skipBtn = document.getElementById('skip-ad-btn');
+      
+      overlay.style.display = 'flex';
+      skipBtn.disabled = true;
+      skipBtn.innerText = "Lütfen Bekleyin...";
+      
+      let timeLeft = 30;
+      countdownEl.innerText = timeLeft;
+
+      let adInterval = setInterval(() => {
+        timeLeft--;
+        countdownEl.innerText = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(adInterval);
+          skipBtn.disabled = false;
+          skipBtn.innerText = "Oyuna Devam Et";
+          skipBtn.onclick = () => {
+            overlay.style.display = 'none';
+            isAdPlaying = false;
+            resetGame();
+          };
+        }
+      }, 1000);
     }
 
     function drawStartScreen() {
@@ -649,7 +795,7 @@
     }
 
     function loop(timestamp) {
-      if (!gameStarted || gameOver) {
+      if (!gameStarted || gameOver || isAdPlaying) {
         animationFrameId = null;
         return;
       }
@@ -721,6 +867,11 @@
 
           playSwooshSound();
           addScore(1);
+
+          if (currentRunPipes > 0 && currentRunPipes % 150 === 0) {
+            triggerInterstitialAd();
+            return;
+          }
         }
 
         if (p.x + pipeWidth < 0) { pipes.splice(i, 1); }
